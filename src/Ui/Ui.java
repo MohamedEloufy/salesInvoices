@@ -4,6 +4,7 @@ package Ui;
 import javax.swing.*;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.table.DefaultTableModel;
 
 
@@ -11,8 +12,12 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.*;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
+import java.util.function.Predicate;
 
 public class Ui extends JFrame implements ActionListener {
 
@@ -25,9 +30,9 @@ public class Ui extends JFrame implements ActionListener {
 
 
     private JPanel rightPanel;
-    protected JTable invoicesTable;
+    public JTable invoicesTable;
 
-    protected JTable invoiceDataTable;
+    public JTable invoiceDataTable;
 
     private JButton btn1;
 
@@ -40,14 +45,13 @@ public class Ui extends JFrame implements ActionListener {
     private JTextField invoiceNumber;
     private JTextField invoiceTotal;
 
-    DefaultTableModel dtm;
-    DefaultTableModel dtm2;
+    public DefaultTableModel dtm;
+    public DefaultTableModel dtm2;
 
 
-    public Ui() {
+    public Ui() throws IOException {
         super("Design preview [NewJFrame]");
-        //setLayout(new GridLayout(1,2));
-        setLayout(new FlowLayout(FlowLayout.LEFT));
+        setLayout(new GridLayout(1, 2));
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setExtendedState(MAXIMIZED_BOTH);
         menuBar = new JMenuBar();
@@ -63,16 +67,15 @@ public class Ui extends JFrame implements ActionListener {
         fileMenu.add(saveMenuItem);
         setJMenuBar(menuBar);
 
-
         // table
         String[] tblHead = {"No", "Data", "Customer Name", "Total"};
         dtm = new DefaultTableModel(tblHead, 0);
         invoicesTable = new JTable(dtm);
+
         invoicesTable.getSelectionModel().addListSelectionListener(new ListSelectionListener() {
             @Override
             public void valueChanged(ListSelectionEvent e) {
                 if (invoicesTable.getSelectedRow() > -1) {
-                    invoiceDataTable.setVisible(true);
                     String No = invoicesTable.getValueAt(invoicesTable.getSelectedRow(), 0).toString();
                     String Date = invoicesTable.getValueAt(invoicesTable.getSelectedRow(), 1).toString();
                     String customer_Name = invoicesTable.getValueAt(invoicesTable.getSelectedRow(), 2).toString();
@@ -86,11 +89,13 @@ public class Ui extends JFrame implements ActionListener {
 
                     List<ItemRow> itemsList = getItemsByInvoiceId(Integer.parseInt(No));
                     populateItemsList(itemsList);
+                    invoiceDataTable.setVisible(true);
 
                 } else {
                     invoiceNumber.setText("");
                     InVoiceData.setText("");
                     customerName.setText("");
+                    invoiceTotal.setText("");
                 }
 
 
@@ -99,7 +104,6 @@ public class Ui extends JFrame implements ActionListener {
         invoicesTable.getTableHeader().setFont(new Font("SansSerif", Font.ITALIC, 12));
         invoicesTable.setGridColor(Color.black);
         invoicesTable.setLocation(20, 20);
-        invoicesTable.setDefaultEditor(Object.class, null);
 
 
         // buttons
@@ -149,10 +153,12 @@ public class Ui extends JFrame implements ActionListener {
         invoiceDataTable.setCellSelectionEnabled(true);
 
 
-        btn3 = new JButton("Save");
+        btn3 = new JButton("create new item");
         btn3.addActionListener(this);
-        btn3.setActionCommand("save BTN");
-        btn4 = new JButton("Cancel");
+        btn3.setActionCommand("create new item");
+        btn4 = new JButton("delete item");
+        btn4.addActionListener(this);
+        btn4.setActionCommand("delete item");
         add(btn3);
         add(btn4);
 
@@ -205,11 +211,10 @@ public class Ui extends JFrame implements ActionListener {
 
     }
 
-    private void populateItemsList(List<ItemRow> itemsList) {
+    public void populateItemsList(List<ItemRow> itemsList) {
         clearItemsTable();
         for (ItemRow itemRow : itemsList) {
             dtm2.addRow(itemRow.toStringArray());
-
         }
     }
 
@@ -217,6 +222,15 @@ public class Ui extends JFrame implements ActionListener {
         if (dtm2.getRowCount() > 0) {
             for (int i = dtm2.getRowCount() - 1; i > -1; i--) {
                 dtm2.removeRow(i);
+            }
+        }
+    }
+
+    private void clearInvoicesTable() {
+        invoiceList.clear();
+        if (dtm.getRowCount() > 0) {
+            for (int i = dtm.getRowCount() - 1; i > -1; i--) {
+                dtm.removeRow(i);
             }
         }
     }
@@ -238,84 +252,105 @@ public class Ui extends JFrame implements ActionListener {
         switch (e.getActionCommand()) {
             case "load":
                 try {
-
                     ReadFiles();
-                   calculateTotalValue();
+                    calculateTotalValue();
                 } catch (IOException ex) {
                     throw new RuntimeException(ex);
                 }
                 break;
             case "save data":
-                ExportFiles export=new ExportFiles();
-                export.exportToCSV(invoicesTable,System.getProperty("user.dir")+"//downloadedFolder//invoices.csv" );
-                export.exportToCSV(invoiceDataTable,System.getProperty("user.dir")+"//downloadedFolder//invoicesItem.csv");
-                JOptionPane.showMessageDialog(this,"saved","confirm Saving",1);
+
+                try {
+                    FileOperations export = new FileOperations();
+                    export.saveContent(invoicesTable, " InvoiceRow");
+                    System.out.println(invoicesTable);
+                    export.saveContent(invoiceDataTable, " invoice lines");
+                    System.out.println(invoiceDataTable);
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                }
+
                 break;
             case "new invoice":
-                dtm.addRow(AddInvoice.addInvoice());
+                dtm.addRow(AddInvoiceItem.addInvoice());
                 calculateTotalValue();
                 break;
             case "delete invoice":
                 if (invoicesTable.getSelectedRow() > -1) {
                     dtm.removeRow(invoicesTable.getSelectedRow());
+
+
+                    itemsList.clear();
                     invoiceTotal.setText("");
                 }
-                    if (invoicesTable.getSelectedRow() == -1)
-                    {
-                        invoiceDataTable.setVisible(false);
-                    }else {
-                        invoiceDataTable.setVisible(true);
-                    }
+                if (invoicesTable.getSelectedRow() == -1) {
+                    invoiceDataTable.setVisible(false);
+                } else {
+                    invoiceDataTable.setVisible(true);
+                }
+                break;
+            case "create new item":
+                dtm2.addRow(AddInvoiceItem.addItem());
+                invoiceDataTable.setVisible(true);
+                break;
 
-                        break;
+            case "delete item":
+                if (invoiceDataTable.getSelectedRow() > -1) {
+                    dtm2.removeRow(invoiceDataTable.getSelectedRow());
 
-
-                    }
+                    break;
+                }
         }
+    }
 
 
-    private ArrayList<String[]> invoiceList = new ArrayList<>();
-    private ArrayList<ItemRow> itemsList = new ArrayList<>();
+    public ArrayList<InvoiceRow> invoiceList = new ArrayList<>();
+    public ArrayList<ItemRow> itemsList = new ArrayList<>();
 
     public void ReadFiles() throws IOException {
-
-
         JFileChooser chooseFile = new JFileChooser();
         chooseFile.setMultiSelectionEnabled(true);
+        chooseFile.setAcceptAllFileFilterUsed(false);
+        chooseFile.addChoosableFileFilter(new FileNameExtensionFilter("Microsoft Excel Documents", "csv"));
         int result = chooseFile.showOpenDialog(this);
         if (result == JFileChooser.APPROVE_OPTION) {
+
             File[] files = chooseFile.getSelectedFiles();
 
             BufferedReader reader = null;
             BufferedReader reader2 = null;
-            String line ;
+            String line;
             String linee;
 
             try {
                 reader = new BufferedReader(new FileReader(files[0]));
+                clearInvoicesTable();
                 while ((line = reader.readLine()) != null) {
                     String[] row = line.split(",");
-                    invoiceList.add(row);
-                    dtm.addRow(row);
+                    Date date = new SimpleDateFormat("dd-MM-yyyy").parse(row[1]);
+                    System.out.println(date);
+                    InvoiceRow invoiceRow = new InvoiceRow(Integer.parseInt(row[0]), date, row[2], 0);
+                    System.out.println(calculateTotalValue());
+                    invoiceList.add(invoiceRow);
+                    dtm.addRow(invoiceRow.getInvoiceRow());
                 }
             } catch (Exception e) {
                 e.printStackTrace();
             }
             try {
                 reader2 = new BufferedReader(new FileReader(files[1]));
+                itemsList.clear();
                 while ((linee = reader2.readLine()) != null) {
                     String[] rowTable2 = linee.split(",");
-                    ItemRow itemRow = new ItemRow(
-                            Integer.parseInt(rowTable2[0]),
-                            rowTable2[1],
-                            Integer.parseInt(rowTable2[2]),
-                            Integer.parseInt(rowTable2[3]),
-                            Integer.parseInt(rowTable2[2]) * Integer.parseInt(rowTable2[3])
-                    );
+                    double price = Double.parseDouble(rowTable2[2]);
+                    int count = Integer.parseInt(rowTable2[3]);
+                    double totalPrice = price * count;
+                    ItemRow itemRow = new ItemRow(Integer.parseInt(rowTable2[0]), rowTable2[1], price, count, totalPrice);
                     itemsList.add(itemRow);
-                    populateItemsList(itemsList);
+                    System.out.println(Arrays.toString(itemRow.toStringArray()));
                 }
 
+                calculateInvoiceTableTotals();
             } catch (Exception e) {
                 e.printStackTrace();
 
@@ -329,13 +364,13 @@ public class Ui extends JFrame implements ActionListener {
     }
 
     public int calculateTotalValue() {
-        int value;
+        double value;
         int sum = 0;
         for (int j = 0; j < invoicesTable.getRowCount(); j++) {
             for (int i = 0; i < invoiceDataTable.getRowCount(); i++) {
 
                 if (invoiceDataTable.getValueAt(i, 0).equals(invoicesTable.getValueAt(j, 0))) {
-                    value = Integer.parseInt((String) invoiceDataTable.getValueAt(i, 4));
+                    value = Double.parseDouble((String) invoiceDataTable.getValueAt(i, 4));
                     sum += value;
                     invoicesTable.setValueAt(sum, j, 3);
                 } else
@@ -347,5 +382,81 @@ public class Ui extends JFrame implements ActionListener {
     }
 
 
+    public void readDataInvoiceHeaderTable() {
+        String PATH = "/Users/eloufy/IdeaProjects/salesInvoices/Files/InvoiceHeader.csv";
+        BufferedReader reader = null;
+        String line;
+        try {
+            reader = new BufferedReader(new FileReader(PATH));
+            while ((line = reader.readLine()) != null) {
+                String[] row = line.split(",");
+                Date date = new SimpleDateFormat("dd-MM-yyyy").parse(row[1]);
+
+                InvoiceRow invoiceRow = new InvoiceRow(Integer.parseInt(row[0]), date, row[2], 0);
+                invoiceList.add(invoiceRow);
+                dtm.addRow(invoiceRow.getInvoiceRow());
+                System.out.println(Arrays.toString(invoiceRow.getInvoiceRow()));
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    public void readDataInvoiceItemTable() {
+        String PATH = "/Users/eloufy/IdeaProjects/salesInvoices/Files/InvoiceLine.csv";
+        BufferedReader reader = null;
+        String line;
+        try {
+            reader = new BufferedReader(new FileReader(PATH));
+            while ((line = reader.readLine()) != null) {
+                String[] row = line.split(",");
+                double price = Double.parseDouble(row[2]);
+                int count = Integer.parseInt(row[3]);
+                double totalPrice = price * count;
+                ItemRow itemRow = new ItemRow(Integer.parseInt(row[0]), row[1], price, count, totalPrice);
+                itemsList.add(itemRow);
+                System.out.println(Arrays.toString(itemRow.toStringArray()));
+
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void calculateInvoiceTableTotals() {
+        for (int i = 0; i < invoiceList.size(); i++) {
+            InvoiceRow invoiceRow = invoiceList.get(i);
+            int invoiceId = invoiceRow.getNum();
+            List<Double> totals = itemsList.stream()
+                    .filter(itemRow -> itemRow.id == invoiceId)
+                    .map(itemRow -> itemRow.getTotal())
+                    .toList();
+            double invoiceTotal = 0;
+            for (double total : totals) {
+                invoiceTotal += total;
+            }
+            invoiceRow.setTotal(invoiceTotal);
+            dtm.setValueAt(invoiceTotal, i, 3);
+        }
+    }
+
+   /* public double valueCalculate()
+    {
+        ItemRow itemRow;
+        double priceOfItem=0;
+        double sum=0;
+
+
+            for (int i = 1; i <= itemsList.size(); i++) {
+                itemRow = itemsList.get(i-1);
+                int id=itemRow.getId();
+                priceOfItem = itemRow.getTotal();
+                    sum += priceOfItem;
+                }
+
+        System.out.println(sum);
+        return sum;
+    }*/
 
 }

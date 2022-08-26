@@ -3,11 +3,11 @@ package Ui;
 public class ItemRow {
     int id;
     String name;
-    int price;
+    double price;
     int count;
-    int total;
+    double total;
 
-    public ItemRow(int id, String name, int price, int count, int total) {
+    public ItemRow(int id, String name, double price, int count, double total) {
         this.id = id;
         this.name = name;
         this.price = price;
@@ -31,7 +31,7 @@ public class ItemRow {
         this.name = name;
     }
 
-    public int getPrice() {
+    public double getPrice() {
         return price;
     }
 
@@ -47,7 +47,7 @@ public class ItemRow {
         this.count = count;
     }
 
-    public int getTotal() {
+    public double getTotal() {
         return total;
     }
 
